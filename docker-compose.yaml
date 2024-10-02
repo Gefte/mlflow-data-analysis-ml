@@ -8,7 +8,7 @@ services:
     ports:
       - '8888:8888'
     volumes:
-      - '/home/geftealmeida/Área de Trabalho/XP/mlflow-data-analysis-ml/notebooks:/home/jovyan/work'
+      - '/caminho/para/seu/projeto/mlflow-data-analysis-ml/notebooks:/home/jovyan/work'
     networks:
       - mlflow
     environment:
@@ -90,7 +90,7 @@ services:
     ports:
       - '8000:8000'
     volumes:
-      - '/home/geftealmeida/Área de Trabalho/XP/mlflow-data-analysis-ml/src:/app'
+      - '/caminho/para/seu/projeto/mlflow-data-analysis-ml/src:/app'
     networks:
       - mlflow
     environment:
@@ -98,6 +98,24 @@ services:
       - AWS_ACCESS_KEY_ID=mlflow
       - AWS_SECRET_ACCESS_KEY=password
       - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
+
+  test_api_model:
+    build:
+      context: ./src
+      dockerfile: Dockerfile
+    container_name: test_api_model
+    volumes:
+      - '/caminho/para/seu/projeto/XP/mlflow-data-analysis-ml/src:/app'
+      - '/caminho/para/seu/projeto/mlflow-data-analysis-ml/tests:/tests'
+    networks:
+      - mlflow
+    environment:
+      - PYTHONUNBUFFERED=1
+      - AWS_ACCESS_KEY_ID=mlflow
+      - AWS_SECRET_ACCESS_KEY=password
+      - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
+      - PYTHONPATH=/app 
+    entrypoint: ["pytest", "/tests"]
 
 networks:
   mlflow:
