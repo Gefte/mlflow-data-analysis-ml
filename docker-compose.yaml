@@ -1,0 +1,110 @@
+version: '3.8'
+services:
+  jupyter:
+    build:
+      context: ./docker
+      dockerfile: Dockerfile.jupyter
+    container_name: jupyter
+    ports:
+      - '8888:8888'
+    volumes:
+      - '/home/geftealmeida/Área de Trabalho/XP/mlflow-data-analysis-ml/notebooks:/home/jovyan/work'
+    networks:
+      - mlflow
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
+      - JUPYTER_TOKEN=mlflow
+      - AWS_ACCESS_KEY_ID=mlflow
+      - AWS_SECRET_ACCESS_KEY=password
+      - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
+
+  mlflow-web:
+    build:
+      context: ./docker
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      - AWS_ACCESS_KEY_ID=mlflow
+      - AWS_SECRET_ACCESS_KEY=password
+      - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
+    networks:
+      - mlflow
+    entrypoint: mlflow server --backend-store-uri postgresql+psycopg2://mlflow:secret@pgsql/mlflow --default-artifact-root s3://mlflow/ --artifacts-destination s3://mlflow/ -h 0.0.0.0
+    depends_on:
+      - pgsql
+      - minio
+
+  minio:
+    image: 'minio/minio:latest'
+    ports:
+      - '${FORWARD_MINIO_PORT:-9000}:9000'
+      - '${FORWARD_MINIO_CONSOLE_PORT:-8900}:8900'
+    environment:
+      MINIO_ROOT_USER: mlflow
+      MINIO_ROOT_PASSWORD: password
+    volumes:
+      - 'mlflow-minio:/data/minio'
+    networks:
+      - mlflow
+    command: 'minio server /data/minio --console-address ":8900"'
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - '-f'
+        - 'http://localhost:9000/minio/health/live'
+      retries: 3
+      timeout: 5s
+
+  pgsql:
+    image: 'postgres:14'
+    ports:
+      - '${FORWARD_DB_PORT:-5432}:5432'
+    environment:
+      PGPASSWORD: '${DB_PASSWORD:-secret}'
+      POSTGRES_DB: '${DB_DATABASE:-mlflow}'
+      POSTGRES_USER: '${DB_USERNAME:-mlflow}'
+      POSTGRES_PASSWORD: '${DB_PASSWORD:-secret}'
+    volumes:
+      - 'mlflow-pgsql:/var/lib/postgresql/data'
+    networks:
+      - mlflow
+    healthcheck:
+      test:
+        - CMD
+        - pg_isready
+        - '-q'
+        - '-d'
+        - '${DB_DATABASE:-mlflow}'
+        - '-U'
+        - '${DB_USERNAME:-mlflow}'
+      retries: 3
+      timeout: 5s
+
+  api_model:
+    build:
+      context: ./src
+      dockerfile: Dockerfile
+    container_name: api_model
+    ports:
+      - '8000:8000'
+    volumes:
+      - '/home/geftealmeida/Área de Trabalho/XP/mlflow-data-analysis-ml/src:/app'
+    networks:
+      - mlflow
+    environment:
+      - PYTHONUNBUFFERED=1
+      - AWS_ACCESS_KEY_ID=mlflow
+      - AWS_SECRET_ACCESS_KEY=password
+      - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
+
+networks:
+  mlflow:
+    driver: bridge
+
+volumes:
+  mlflow-pgsql:
+    driver: local
+  mlflow-minio:
+    driver: local
